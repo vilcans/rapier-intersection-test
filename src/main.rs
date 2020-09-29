@@ -1,6 +1,7 @@
 use rapier3d::{
     dynamics::{BodyStatus, IntegrationParameters, JointSet, RigidBodyBuilder, RigidBodySet},
     geometry::{BroadPhase, ColliderBuilder, ColliderSet, NarrowPhase},
+    na::Point3,
     na::Vector3,
     pipeline::{ChannelEventCollector, PhysicsPipeline},
 };
@@ -62,7 +63,16 @@ fn main() {
 
     let floor_body = RigidBodyBuilder::new(BodyStatus::Static).build();
     let floor_body_handle = rigid_body_set.insert(floor_body);
-    let floor_collider = ColliderBuilder::cuboid(20.0, 0.1, 20.0).build();
+    let floor_collider = ColliderBuilder::trimesh(
+        vec![
+            Point3::new(-10.0, 0.0, -10.0), // 0
+            Point3::new(10.0, 0.0, -10.0),  // 1
+            Point3::new(10.0, 0.0, 10.0),   // 2
+            Point3::new(-10.0, 0.0, 10.0),  // 3
+        ],
+        vec![Point3::new(0, 1, 2), Point3::new(1, 2, 3)],
+    )
+    .build();
     collider_set.insert(floor_collider, floor_body_handle, &mut rigid_body_set);
 
     for _ in 0..100 {
