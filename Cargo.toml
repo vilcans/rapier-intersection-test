@@ -1,0 +1,12 @@
+[package]
+name = "evalrapier"
+version = "0.1.0"
+authors = ["Martin Vilcans <martin@librador.com>"]
+edition = "2018"
+
+[dependencies]
+rapier3d = "0.1.5"
+
+#[[bin]]
+#name = "example"
+#path = "./example.rs"
