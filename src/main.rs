@@ -80,11 +80,7 @@ fn create_world(floor_is_mesh: bool, floor_status: BodyStatus, sensor_status: Bo
     let pipeline = PhysicsPipeline::new();
     let gravity = Vector3::new(0.0, -9.81, 0.0);
 
-    // See https://rapier.rs/docs/user_guides/rust/integration_parameters
-    let mut integration_parameters = IntegrationParameters::default();
-    integration_parameters.allowed_linear_error = 0.01; // Allow this much penetration
-    integration_parameters.set_inv_dt(100.0);
-
+    let integration_parameters = IntegrationParameters::default();
     let broad_phase = BroadPhase::new();
     let narrow_phase = NarrowPhase::new();
     let joints = JointSet::new();
