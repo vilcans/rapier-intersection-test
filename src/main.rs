@@ -164,16 +164,14 @@ pub fn main() {
             let world = create_world(true, floor_status, moving_status, sensor);
             let result = test_world(world);
             println!(
-                "{:?} collides with moving {:?}? {}",
-                floor_status,
-                moving_status,
-                if result { "Yes" } else { "No" }
+                "Moving {:?} vs {:?} => {}",
+                moving_status, floor_status, result
             );
         }
     }
 }
 
-fn test_world(mut world: World) -> bool {
+fn test_world(mut world: World) -> String {
     let new_pos = Isometry3::new(Vector3::new(0.0, 0.0, 0.0), na::zero());
     {
         let mut moving = world
@@ -198,5 +196,13 @@ fn test_world(mut world: World) -> bool {
 
     let (proximity_events, contact_events) = world.step();
     //assert_eq!(contact_events.len(), 0);
-    proximity_events.len() == 1 || contact_events.len() == 1
+    match (proximity_events.len(), contact_events.len()) {
+        (1, 0) => "Proximity".to_string(),
+        (0, 1) => "Contact".to_string(),
+        (0, 0) => "None".to_string(),
+        (p, c) => panic!(
+            "Strange number of proximity events: {} and contact events: {}",
+            p, c
+        ),
+    }
 }
