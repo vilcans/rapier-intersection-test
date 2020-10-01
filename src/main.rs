@@ -1,6 +1,7 @@
 use rapier3d::{
     dynamics::{BodyStatus, IntegrationParameters, JointSet, RigidBodyBuilder, RigidBodySet},
     geometry::{BroadPhase, ColliderBuilder, ColliderSet, NarrowPhase},
+    na::Isometry3,
     na::Point3,
     na::Vector3,
     pipeline::{ChannelEventCollector, PhysicsPipeline},
@@ -59,6 +60,11 @@ fn main() {
     let ball_collider_handle =
         collider_set.insert(ball_collider, ball_body_handle, &mut rigid_body_set);
 
+    println!(
+        "Ball: body handle {:?} collider handle {:?}",
+        ball_body_handle, ball_collider_handle
+    );
+
     // Floor
 
     let floor_body = RigidBodyBuilder::new(BodyStatus::Static).build();
@@ -73,16 +79,63 @@ fn main() {
         vec![Point3::new(0, 1, 2), Point3::new(1, 2, 3)],
     )
     .build();
-    collider_set.insert(floor_collider, floor_body_handle, &mut rigid_body_set);
+    let floor_collider_handle =
+        collider_set.insert(floor_collider, floor_body_handle, &mut rigid_body_set);
 
-    for _ in 0..100 {
-        let collider = collider_set.get(ball_collider_handle).unwrap();
-        let body = rigid_body_set.get(ball_body_handle).unwrap();
-        println!(
-            "collider: {:?} body {:?}",
-            collider.position().translation,
-            body.position.translation
-        );
+    println!(
+        "Floor: body handle {:?} collider handle {:?}",
+        floor_body_handle, floor_collider_handle
+    );
+
+    // Sensor
+
+    let sensor_body = RigidBodyBuilder::new(BodyStatus::Kinematic)
+        .translation(0.0, 20.0, 0.0)
+        .can_sleep(false)
+        .build();
+    let sensor_body_handle = rigid_body_set.insert(sensor_body);
+    let sensor_collider = ColliderBuilder::ball(0.5).sensor(true).build();
+    let sensor_collider_handle =
+        collider_set.insert(sensor_collider, sensor_body_handle, &mut rigid_body_set);
+
+    println!(
+        "Sensor: body handle {:?} collider handle {:?}",
+        sensor_body_handle, sensor_collider_handle
+    );
+
+    for frame in 0..200 {
+        {
+            {
+                let mut sensor = rigid_body_set.get_mut(sensor_body_handle).unwrap();
+                let y = 20.0 - frame as f32;
+                println!("Sensor y {}", y);
+                sensor.set_next_kinematic_position(Isometry3::new(
+                    Vector3::new(0.0, y, 0.0),
+                    Vector3::new(0.0, 0.0, 0.0),
+                ));
+            }
+
+            if frame == 100 {
+                //println!("Adding force");
+                //body.apply_impulse(Vector3::new(0.0, 0.0, 1000.0));
+                /*
+                println!("Moving sensor");
+                let mut sensor = rigid_body_set.get_mut(sensor_body_handle).unwrap();
+                sensor.set_next_kinematic_position(Isometry3::new(
+                    Vector3::new(0.0, 0.0, 0.0),
+                    Vector3::new(0.0, 0.0, 0.0),
+                ));*/
+            }
+            let body = rigid_body_set.get(ball_body_handle).unwrap();
+            let collider = collider_set.get(ball_collider_handle).unwrap();
+            println!(
+                "Frame {}, collider: {:?} body {:?}",
+                frame,
+                collider.position().translation,
+                body.position.translation
+            );
+        }
+
         pipeline.step(
             &gravity,
             &integration_parameters,
