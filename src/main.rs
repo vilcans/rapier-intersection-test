@@ -149,8 +149,7 @@ pub fn main() {
         BodyStatus::Static,
         BodyStatus::Kinematic,
     ];
-    for test_statuses in statuses.into_iter().combinations_with_replacement(2) {
-        let (floor_status, sensor_status) = (test_statuses[0], test_statuses[1]);
+    for (&floor_status, &sensor_status) in statuses.iter().cartesian_product(&statuses) {
         let world = create_world(true, floor_status, sensor_status);
         let result = test_world(world);
         println!(
