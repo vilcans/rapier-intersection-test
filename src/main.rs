@@ -1,14 +1,73 @@
+use crossbeam::Receiver;
 use rapier3d::{
-    dynamics::{BodyStatus, IntegrationParameters, JointSet, RigidBodyBuilder, RigidBodySet},
-    geometry::{BroadPhase, ColliderBuilder, ColliderSet, NarrowPhase},
+    dynamics::{
+        BodyStatus, IntegrationParameters, JointSet, RigidBodyBuilder, RigidBodyHandle,
+        RigidBodySet,
+    },
+    geometry::{
+        BroadPhase, ColliderBuilder, ColliderHandle, ColliderSet, ContactEvent, NarrowPhase,
+        ProximityEvent,
+    },
     na::Isometry3,
     na::Point3,
     na::Vector3,
     pipeline::{ChannelEventCollector, PhysicsPipeline},
 };
 
-fn main() {
-    let mut pipeline = PhysicsPipeline::new();
+#[allow(dead_code)]
+struct World {
+    pipeline: PhysicsPipeline,
+    gravity: Vector3<f32>,
+    integration_parameters: IntegrationParameters,
+    broad_phase: BroadPhase,
+    narrow_phase: NarrowPhase,
+    joints: JointSet,
+    rigid_body_set: RigidBodySet,
+    collider_set: ColliderSet,
+    proximity_recv: Receiver<ProximityEvent>,
+    contact_recv: Receiver<ContactEvent>,
+    event_handler: ChannelEventCollector,
+
+    ball_body_handle: RigidBodyHandle,
+    ball_collider_handle: ColliderHandle,
+
+    sensor_body_handle: RigidBodyHandle,
+    sensor_collider_handle: ColliderHandle,
+
+    floor_body_handle: RigidBodyHandle,
+    floor_collider_handle: ColliderHandle,
+}
+
+impl World {
+    fn step(&mut self) -> (Vec<ProximityEvent>, Vec<ContactEvent>) {
+        self.pipeline.step(
+            &self.gravity,
+            &self.integration_parameters,
+            &mut self.broad_phase,
+            &mut self.narrow_phase,
+            &mut self.rigid_body_set,
+            &mut self.collider_set,
+            &mut self.joints,
+            &self.event_handler,
+        );
+
+        let mut proximity_events = Vec::new();
+        while let Ok(proximity_event) = self.proximity_recv.try_recv() {
+            println!("Got proximity event {:?}", proximity_event);
+            proximity_events.push(proximity_event);
+        }
+
+        let mut contact_events = Vec::new();
+        while let Ok(contact_event) = self.contact_recv.try_recv() {
+            println!("Got contact event {:?}", contact_event);
+            contact_events.push(contact_event);
+        }
+        (proximity_events, contact_events)
+    }
+}
+
+fn create_world() -> World {
+    let pipeline = PhysicsPipeline::new();
     let gravity = Vector3::new(0.0, -9.81, 0.0);
 
     // See https://rapier.rs/docs/user_guides/rust/integration_parameters
@@ -16,9 +75,9 @@ fn main() {
     integration_parameters.allowed_linear_error = 0.01; // Allow this much penetration
     integration_parameters.set_inv_dt(100.0);
 
-    let mut broad_phase = BroadPhase::new();
-    let mut narrow_phase = NarrowPhase::new();
-    let mut joints = JointSet::new();
+    let broad_phase = BroadPhase::new();
+    let narrow_phase = NarrowPhase::new();
+    let joints = JointSet::new();
     let mut rigid_body_set = RigidBodySet::new();
     let mut collider_set = ColliderSet::new();
 
@@ -102,11 +161,37 @@ fn main() {
         "Sensor: body handle {:?} collider handle {:?}",
         sensor_body_handle, sensor_collider_handle
     );
+    World {
+        pipeline,
+        gravity,
+        integration_parameters,
+        broad_phase,
+        narrow_phase,
+        joints,
+        rigid_body_set,
+        collider_set,
+        proximity_recv,
+        contact_recv,
+        event_handler,
+        ball_body_handle,
+        ball_collider_handle,
+        sensor_body_handle,
+        sensor_collider_handle,
+        floor_body_handle,
+        floor_collider_handle,
+    }
+}
+
+pub fn main() {
+    let mut world = create_world();
 
     for frame in 0..200 {
         {
             {
-                let mut sensor = rigid_body_set.get_mut(sensor_body_handle).unwrap();
+                let mut sensor = world
+                    .rigid_body_set
+                    .get_mut(world.sensor_body_handle)
+                    .unwrap();
                 let y = 20.0 - frame as f32;
                 println!("Sensor y {}", y);
                 sensor.set_next_kinematic_position(Isometry3::new(
@@ -126,8 +211,8 @@ fn main() {
                     Vector3::new(0.0, 0.0, 0.0),
                 ));*/
             }
-            let body = rigid_body_set.get(ball_body_handle).unwrap();
-            let collider = collider_set.get(ball_collider_handle).unwrap();
+            let body = world.rigid_body_set.get(world.ball_body_handle).unwrap();
+            let collider = world.collider_set.get(world.ball_collider_handle).unwrap();
             println!(
                 "Frame {}, collider: {:?} body {:?}",
                 frame,
@@ -136,23 +221,6 @@ fn main() {
             );
         }
 
-        pipeline.step(
-            &gravity,
-            &integration_parameters,
-            &mut broad_phase,
-            &mut narrow_phase,
-            &mut rigid_body_set,
-            &mut collider_set,
-            &mut joints,
-            &event_handler,
-        );
-
-        while let Ok(proximity_event) = proximity_recv.try_recv() {
-            println!("Got proximity event {:?}", proximity_event);
-        }
-
-        while let Ok(contact_event) = contact_recv.try_recv() {
-            println!("Got contact event {:?}", contact_event);
-        }
+        let (_proximity_events, _contact_events) = world.step();
     }
 }
