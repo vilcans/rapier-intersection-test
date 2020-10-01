@@ -76,7 +76,12 @@ impl World {
     }
 }
 
-fn create_world(floor_is_mesh: bool, floor_status: BodyStatus, sensor_status: BodyStatus) -> World {
+fn create_world(
+    floor_is_mesh: bool,
+    floor_status: BodyStatus,
+    sensor_status: BodyStatus,
+    sensor_is_sensor: bool,
+) -> World {
     let pipeline = PhysicsPipeline::new();
     let gravity = Vector3::new(0.0, -9.81, 0.0);
 
@@ -120,7 +125,7 @@ fn create_world(floor_is_mesh: bool, floor_status: BodyStatus, sensor_status: Bo
         .can_sleep(false)
         .build();
     let sensor_body_handle = rigid_body_set.insert(sensor_body);
-    let sensor_collider = ColliderBuilder::ball(0.5).sensor(true).build();
+    let sensor_collider = ColliderBuilder::ball(0.5).sensor(sensor_is_sensor).build();
     let sensor_collider_handle =
         collider_set.insert(sensor_collider, sensor_body_handle, &mut rigid_body_set);
 
@@ -149,15 +154,22 @@ pub fn main() {
         BodyStatus::Static,
         BodyStatus::Kinematic,
     ];
-    for (&floor_status, &sensor_status) in statuses.iter().cartesian_product(&statuses) {
-        let world = create_world(true, floor_status, sensor_status);
-        let result = test_world(world);
-        println!(
-            "floor is {:?}, sensor is {:?}: {}",
-            floor_status,
-            sensor_status,
-            if result { "OK" } else { "FAIL" }
-        );
+    for &sensor in &[false, true] {
+        if sensor {
+            println!("\nMoving object is sensor:");
+        } else {
+            println!("\nMoving object is not a sensor:");
+        }
+        for (&floor_status, &sensor_status) in statuses.iter().cartesian_product(&statuses) {
+            let world = create_world(true, floor_status, sensor_status, sensor);
+            let result = test_world(world);
+            println!(
+                "{:?} collides with moving {:?}? {}",
+                floor_status,
+                sensor_status,
+                if result { "Yes" } else { "No" }
+            );
+        }
     }
 }
 
@@ -178,13 +190,13 @@ fn test_world(mut world: World) -> bool {
     let (proximity_events, contact_events) = world.step();
     assert_eq!(contact_events.len(), 0);
     assert_eq!(proximity_events.len(), 0);
-
-    {
-        let sensor = world.rigid_body_set.get(world.sensor_body_handle).unwrap();
-        assert_eq!(new_pos, sensor.position, "Sensor should have moved");
-    }
-
+    /*
+        {
+            let sensor = world.rigid_body_set.get(world.sensor_body_handle).unwrap();
+            assert_eq!(new_pos, sensor.position, "Sensor should have moved");
+        }
+    */
     let (proximity_events, contact_events) = world.step();
-    assert_eq!(contact_events.len(), 0);
-    proximity_events.len() == 1
+    //assert_eq!(contact_events.len(), 0);
+    proximity_events.len() == 1 || contact_events.len() == 1
 }
