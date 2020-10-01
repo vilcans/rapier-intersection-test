@@ -10,7 +10,7 @@ use rapier3d::{
     },
     na::Isometry3,
     na::Point3,
-    na::Vector3,
+    na::{self, Vector3},
     pipeline::{ChannelEventCollector, PhysicsPipeline},
 };
 
@@ -40,6 +40,18 @@ struct World {
 
 impl World {
     fn step(&mut self) -> (Vec<ProximityEvent>, Vec<ContactEvent>) {
+        {
+            let mut floor = self.rigid_body_set.get_mut(self.floor_body_handle).unwrap();
+            floor.wake_up();
+        }
+        {
+            let mut sensor = self
+                .rigid_body_set
+                .get_mut(self.sensor_body_handle)
+                .unwrap();
+            sensor.wake_up();
+        }
+
         self.pipeline.step(
             &self.gravity,
             &self.integration_parameters,
@@ -66,7 +78,7 @@ impl World {
     }
 }
 
-fn create_world() -> World {
+fn create_world(floor_is_mesh: bool, floor_status: BodyStatus, sensor_status: BodyStatus) -> World {
     let pipeline = PhysicsPipeline::new();
     let gravity = Vector3::new(0.0, -9.81, 0.0);
 
@@ -126,18 +138,22 @@ fn create_world() -> World {
 
     // Floor
 
-    let floor_body = RigidBodyBuilder::new(BodyStatus::Static).build();
+    let floor_body = RigidBodyBuilder::new(floor_status).build();
     let floor_body_handle = rigid_body_set.insert(floor_body);
-    let floor_collider = ColliderBuilder::trimesh(
-        vec![
-            Point3::new(-10.0, 0.0, -10.0), // 0
-            Point3::new(10.0, 0.0, -10.0),  // 1
-            Point3::new(10.0, 0.0, 10.0),   // 2
-            Point3::new(-10.0, 0.0, 10.0),  // 3
-        ],
-        vec![Point3::new(0, 1, 2), Point3::new(1, 2, 3)],
-    )
-    .build();
+    let floor_collider = if floor_is_mesh {
+        ColliderBuilder::trimesh(
+            vec![
+                Point3::new(-10.0, 0.0, -10.0), // 0
+                Point3::new(10.0, 0.0, -10.0),  // 1
+                Point3::new(10.0, 0.0, 10.0),   // 2
+                Point3::new(-10.0, 0.0, 10.0),  // 3
+            ],
+            vec![Point3::new(0, 1, 2), Point3::new(1, 2, 3)],
+        )
+        .build()
+    } else {
+        ColliderBuilder::cuboid(10.0, 0.1, 10.0).build()
+    };
     let floor_collider_handle =
         collider_set.insert(floor_collider, floor_body_handle, &mut rigid_body_set);
 
@@ -148,7 +164,7 @@ fn create_world() -> World {
 
     // Sensor
 
-    let sensor_body = RigidBodyBuilder::new(BodyStatus::Kinematic)
+    let sensor_body = RigidBodyBuilder::new(sensor_status)
         .translation(0.0, 20.0, 0.0)
         .can_sleep(false)
         .build();
@@ -183,7 +199,7 @@ fn create_world() -> World {
 }
 
 pub fn main() {
-    let mut world = create_world();
+    let mut world = create_world(true, BodyStatus::Static, BodyStatus::Kinematic);
 
     for frame in 0..200 {
         {
@@ -223,4 +239,57 @@ pub fn main() {
 
         let (_proximity_events, _contact_events) = world.step();
     }
+}
+
+fn test_world(mut world: World) {
+    let new_pos = Isometry3::new(Vector3::new(0.0, 0.0, 0.0), na::zero());
+    {
+        let mut sensor = world
+            .rigid_body_set
+            .get_mut(world.sensor_body_handle)
+            .unwrap();
+        if sensor.body_status == BodyStatus::Kinematic {
+            println!("Sensor is kinematic");
+            sensor.set_next_kinematic_position(new_pos);
+        } else {
+            sensor.set_position(new_pos)
+        }
+    }
+
+    let (proximity_events, contact_events) = world.step();
+    assert_eq!(proximity_events.len(), 0);
+    assert_eq!(contact_events.len(), 0);
+
+    {
+        let sensor = world.rigid_body_set.get(world.sensor_body_handle).unwrap();
+        assert_eq!(new_pos, sensor.position, "Sensor should have moved");
+    }
+
+    let (proximity_events, contact_events) = world.step();
+    assert_eq!(proximity_events.len(), 1);
+    assert_eq!(contact_events.len(), 0);
+}
+
+#[test]
+pub fn test_static_kinematic() {
+    let world = create_world(false, BodyStatus::Static, BodyStatus::Kinematic);
+    test_world(world);
+}
+
+#[test]
+pub fn test_dynamic_kinematic() {
+    let world = create_world(false, BodyStatus::Dynamic, BodyStatus::Kinematic);
+    test_world(world);
+}
+
+#[test]
+pub fn test_kinematic_kinematic() {
+    let world = create_world(false, BodyStatus::Kinematic, BodyStatus::Kinematic);
+    test_world(world);
+}
+
+#[test]
+pub fn test_kinematic_dynamic() {
+    let world = create_world(false, BodyStatus::Kinematic, BodyStatus::Dynamic);
+    test_world(world);
 }
