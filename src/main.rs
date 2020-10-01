@@ -31,8 +31,8 @@ struct World {
     contact_recv: Receiver<ContactEvent>,
     event_handler: ChannelEventCollector,
 
-    sensor_body_handle: RigidBodyHandle,
-    sensor_collider_handle: ColliderHandle,
+    moving_body_handle: RigidBodyHandle,
+    moving_collider_handle: ColliderHandle,
 
     floor_body_handle: RigidBodyHandle,
     floor_collider_handle: ColliderHandle,
@@ -45,11 +45,11 @@ impl World {
             floor.wake_up();
         }
         {
-            let mut sensor = self
+            let mut moving = self
                 .rigid_body_set
-                .get_mut(self.sensor_body_handle)
+                .get_mut(self.moving_body_handle)
                 .unwrap();
-            sensor.wake_up();
+            moving.wake_up();
         }
 
         self.pipeline.step(
@@ -79,8 +79,8 @@ impl World {
 fn create_world(
     floor_is_mesh: bool,
     floor_status: BodyStatus,
-    sensor_status: BodyStatus,
-    sensor_is_sensor: bool,
+    moving_status: BodyStatus,
+    moving_is_sensor: bool,
 ) -> World {
     let pipeline = PhysicsPipeline::new();
     let gravity = Vector3::new(0.0, -9.81, 0.0);
@@ -118,16 +118,16 @@ fn create_world(
     let floor_collider_handle =
         collider_set.insert(floor_collider, floor_body_handle, &mut rigid_body_set);
 
-    // Sensor
+    // Moving object
 
-    let sensor_body = RigidBodyBuilder::new(sensor_status)
+    let moving_body = RigidBodyBuilder::new(moving_status)
         .translation(0.0, 20.0, 0.0)
         .can_sleep(false)
         .build();
-    let sensor_body_handle = rigid_body_set.insert(sensor_body);
-    let sensor_collider = ColliderBuilder::ball(0.5).sensor(sensor_is_sensor).build();
-    let sensor_collider_handle =
-        collider_set.insert(sensor_collider, sensor_body_handle, &mut rigid_body_set);
+    let moving_body_handle = rigid_body_set.insert(moving_body);
+    let moving_collider = ColliderBuilder::ball(0.5).sensor(moving_is_sensor).build();
+    let moving_collider_handle =
+        collider_set.insert(moving_collider, moving_body_handle, &mut rigid_body_set);
 
     World {
         pipeline,
@@ -141,8 +141,8 @@ fn create_world(
         proximity_recv,
         contact_recv,
         event_handler,
-        sensor_body_handle,
-        sensor_collider_handle,
+        moving_body_handle,
+        moving_collider_handle,
         floor_body_handle,
         floor_collider_handle,
     }
@@ -160,13 +160,13 @@ pub fn main() {
         } else {
             println!("\nMoving object is not a sensor:");
         }
-        for (&floor_status, &sensor_status) in statuses.iter().cartesian_product(&statuses) {
-            let world = create_world(true, floor_status, sensor_status, sensor);
+        for (&floor_status, &moving_status) in statuses.iter().cartesian_product(&statuses) {
+            let world = create_world(true, floor_status, moving_status, sensor);
             let result = test_world(world);
             println!(
                 "{:?} collides with moving {:?}? {}",
                 floor_status,
-                sensor_status,
+                moving_status,
                 if result { "Yes" } else { "No" }
             );
         }
@@ -176,26 +176,26 @@ pub fn main() {
 fn test_world(mut world: World) -> bool {
     let new_pos = Isometry3::new(Vector3::new(0.0, 0.0, 0.0), na::zero());
     {
-        let mut sensor = world
+        let mut moving = world
             .rigid_body_set
-            .get_mut(world.sensor_body_handle)
+            .get_mut(world.moving_body_handle)
             .unwrap();
-        if sensor.body_status == BodyStatus::Kinematic {
-            sensor.set_next_kinematic_position(new_pos);
+        if moving.body_status == BodyStatus::Kinematic {
+            moving.set_next_kinematic_position(new_pos);
         } else {
-            sensor.set_position(new_pos)
+            moving.set_position(new_pos)
         }
     }
 
     let (proximity_events, contact_events) = world.step();
     assert_eq!(contact_events.len(), 0);
     assert_eq!(proximity_events.len(), 0);
-    /*
-        {
-            let sensor = world.rigid_body_set.get(world.sensor_body_handle).unwrap();
-            assert_eq!(new_pos, sensor.position, "Sensor should have moved");
-        }
-    */
+
+    /*{
+        let moving = world.rigid_body_set.get(world.moving_body_handle).unwrap();
+        assert_eq!(new_pos, moving.position, "Moving object should have moved");
+    }*/
+
     let (proximity_events, contact_events) = world.step();
     //assert_eq!(contact_events.len(), 0);
     proximity_events.len() == 1 || contact_events.len() == 1
