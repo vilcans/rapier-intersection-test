@@ -31,9 +31,6 @@ struct World {
     contact_recv: Receiver<ContactEvent>,
     event_handler: ChannelEventCollector,
 
-    ball_body_handle: RigidBodyHandle,
-    ball_collider_handle: ColliderHandle,
-
     sensor_body_handle: RigidBodyHandle,
     sensor_collider_handle: ColliderHandle,
 
@@ -99,39 +96,6 @@ fn create_world(floor_is_mesh: bool, floor_status: BodyStatus, sensor_status: Bo
     let (proximity_send, proximity_recv) = crossbeam::channel::unbounded();
     let event_handler = ChannelEventCollector::new(proximity_send, contact_send);
 
-    // Ball
-
-    let ball_body = RigidBodyBuilder::new(BodyStatus::Dynamic)
-        // The rigid body translation.
-        // Default: zero vector.
-        .translation(0.0, 5.0, 0.0)
-        // The rigid body rotation.
-        // Default: no rotation.
-        //.rotation(Vector3::z() * 5.0)
-        /*
-        // The rigid body position. Will override `.translation(...)` and `.rotation(...)`.
-        // Default: the identity isometry.
-        .position(Isometry3::new(
-            Vector3::new(1.0, 3.0, 2.0),
-            Vector3::y() * std::f32::consts::PI,
-        ))
-        */
-        //.linvel(1.0, 3.0, 4.0)
-        //.angvel(Vector3::x() * 3.0)
-        .can_sleep(true)
-        .build();
-
-    let ball_body_handle = rigid_body_set.insert(ball_body);
-
-    let ball_collider = ColliderBuilder::ball(1.5)
-        .translation(0.0, 0.0, 0.0) // relative to rigid body
-        .friction(0.8)
-        .sensor(false)
-        .build();
-
-    let ball_collider_handle =
-        collider_set.insert(ball_collider, ball_body_handle, &mut rigid_body_set);
-
     // Floor
 
     let floor_body = RigidBodyBuilder::new(floor_status).build();
@@ -176,8 +140,6 @@ fn create_world(floor_is_mesh: bool, floor_status: BodyStatus, sensor_status: Bo
         proximity_recv,
         contact_recv,
         event_handler,
-        ball_body_handle,
-        ball_collider_handle,
         sensor_body_handle,
         sensor_collider_handle,
         floor_body_handle,
